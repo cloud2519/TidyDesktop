@@ -66,7 +66,7 @@ TidyDesktop automatically matches your Windows display language, or you can pick
 
 ## 🚀 Installation & Usage
 
-1. Download the latest release from the [Releases](https://github.com/) page.
+1. Download the latest release from the [Releases](https://github.com/cloud2519/TidyDesktop/releases) page.
 2. Unzip and run `TidyDesktop.exe`.
 3. An icon will appear in the system tray (bottom-right next to the clock). Right-click it to access all settings, rules, and language options.
 
@@ -81,7 +81,7 @@ TidyDesktop automatically matches your Windows display language, or you can pick
 ### Build & Run
 ```bash
 # Clone the repository
-git clone https://github.com/404architect/TidyDesktop.git
+git clone https://github.com/cloud2519/TidyDesktop.git
 cd TidyDesktop
 
 # Build Debug
@@ -94,9 +94,16 @@ The standalone, single-file compressed ZIP release will be created under `dist/`
 
 ---
 
+## 🔏 Code Signing
+
+Free code signing provided by [SignPath.io](https://signpath.io), using a certificate by the [SignPath Foundation](https://signpath.org).
+
+---
+
 ## 📄 License
 
 Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more details.
+
 
 **Crafted with care by [404 Architect](https://www.404architect.com)**
 
