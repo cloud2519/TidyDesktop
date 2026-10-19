@@ -94,12 +94,6 @@ The standalone, single-file compressed ZIP release will be created under `dist/`
 
 ---
 
-## 🔏 Code Signing
-
-Free code signing provided by [SignPath.io](https://signpath.io), using a certificate by the [SignPath Foundation](https://signpath.org).
-
----
-
 ## 📄 License
 
 Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more details.
