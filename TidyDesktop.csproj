@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <!-- WinForms is used only for the tray NotifyIcon -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>ico\TidyDesktop.ico</ApplicationIcon>
+    <Version>1.0.4</Version>
+    <Product>TidyDesktop</Product>
+    <Authors>404 Architect</Authors>
+    <Company>404 Architect</Company>
+    <Copyright>© 2026 404 Architect · www.404architect.com</Copyright>
+    <Description>Keeps desktop icons tidy in boxes</Description>
+    <!-- DPI awareness belongs in the manifest for a WPF app; the WinForms analyzer suggestion does not apply -->
+    <NoWarn>$(NoWarn);WFAC010;WFO0003</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Avoid WPF/WinForms type name collisions (Application, MessageBox, ...) -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The tray shows a simpler picture than the app icon: fine detail is lost at 16 px. -->
+    <EmbeddedResource Include="ico\TidyDesktopTray.ico" LogicalName="TidyDesktopTray.ico" />
+    <!-- Built-in languages; more can be added as files without rebuilding (see Lang.cs). -->
+    <EmbeddedResource Include="Languages\*.json" LogicalName="Languages.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

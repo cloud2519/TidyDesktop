@@ -1,0 +1,11 @@
+bin/
+obj/
+publish/
+*.user
+.vs/
+dist/
+
+# Source artwork for the icons; only the finished .ico files belong in the repository.
+ico/*.png
+.git_old_backup/
+
