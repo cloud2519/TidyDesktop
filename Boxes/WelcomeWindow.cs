@@ -53,7 +53,7 @@ internal sealed class WelcomeWindow : Window
         _autoStartCheck = new CheckBox
         {
             Content = Lang.T("welcome.autoStart"),
-            IsChecked = true,
+            IsChecked = false,
             FontWeight = FontWeights.SemiBold,
             FontSize = 14,
             Margin = new Thickness(0, 0, 0, 4),

@@ -61,6 +61,7 @@ TidyDesktop automatically matches your Windows display language, or you can pick
 - All configurations and recent change logs are stored locally in `%APPDATA%\TidyDesktop`.
 - No network requests are made.
 - When tracking files that left the desktop, TidyDesktop only inspects file names to check where they moved—it never reads file contents.
+- To tell where a file that left the desktop went, it watches file creation and renames on this PC's drives. Only names matching a file that just left the desktop are recorded, and nothing is sent anywhere.
 
 ---
 

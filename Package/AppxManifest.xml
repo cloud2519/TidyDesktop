@@ -6,7 +6,8 @@
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
-  IgnorableNamespaces="uap rescap desktop">
+  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+  IgnorableNamespaces="uap rescap desktop desktop6">
 
   <Identity Name="{IDENTITY_NAME}" Publisher="{PUBLISHER}" Version="{VERSION}" ProcessorArchitecture="x64" />
 
@@ -14,6 +15,9 @@
     <DisplayName>TidyDesktop</DisplayName>
     <PublisherDisplayName>{PUBLISHER_DISPLAY_NAME}</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
+    <!-- Keep %APPDATA%\TidyDesktop the real folder, so the tray's "open settings folder", the log file,
+         custom language files and settings from the zip build all see the same place. -->
+    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
   </Properties>
 
   <Dependencies>
@@ -54,5 +58,7 @@
   <Capabilities>
     <!-- A desktop (Win32/WPF) app: it works on the real desktop shell, outside the app sandbox. -->
     <rescap:Capability Name="runFullTrust" />
+    <!-- Required by FileSystemWriteVirtualization above. -->
+    <rescap:Capability Name="unvirtualizedResources" />
   </Capabilities>
 </Package>
