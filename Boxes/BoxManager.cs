@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Threading;
 using TidyDesktop.Desktop;
@@ -44,6 +44,7 @@ internal sealed class BoxManager : IDisposable
 
     /// <summary>A short message to show the user (title, text), for example after a rule moved a file.</summary>
     public event Action<string, string>? Notify;
+    public event Action? SettingsRequested;
     private bool _desktopHidden;
     private DateTime _lastAutoSnapshot;
     private AppConfig _config = new();
@@ -676,6 +677,7 @@ internal sealed class BoxManager : IDisposable
         };
         view.Title.SortRequested += order => Sort(view, order);
         view.Title.NewBoxRequested += () => CreateBox();
+        view.Title.SettingsRequested += () => SettingsRequested?.Invoke();
         view.Title.DeleteRequested += () => DeleteBox(view);
     }
 

@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Windows;
 using TidyDesktop.Boxes;
 using Forms = System.Windows.Forms;
@@ -63,13 +63,32 @@ public partial class App : Application
             return;
         }
 
+        _manager.SettingsRequested += OpenSettings;
         _tray = CreateTray();
         AutoStart.Refresh();
         // Notifications can be turned off, so the first run says hello in a window that cannot be missed.
         if (_manager.IsFirstRun)
-            MessageBox.Show(
-                Lang.T("app.welcome"),
-                "TidyDesktop", MessageBoxButton.OK, MessageBoxImage.Information);
+        {
+            var welcome = new WelcomeWindow();
+            if (welcome.ShowDialog() == true)
+            {
+                if (welcome.ShouldAutoStart)
+                {
+                    try
+                    {
+                        AutoStart.Set(true);
+                    }
+                    catch (Exception ex)
+                    {
+                        AppData.Log($"Could not enable auto start on welcome: {ex.Message}");
+                    }
+                }
+                if (welcome.ShouldAutoOrganize)
+                {
+                    _manager.AutoOrganize();
+                }
+            }
+        }
 
         if (e.Args.Contains("--organize", StringComparer.OrdinalIgnoreCase))
             _manager.AutoOrganize();
@@ -156,6 +175,7 @@ public partial class App : Application
             }
         });
         menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add(Lang.T("app.settings"), null, (_, _) => OpenSettings());
         menu.Items.Add(Lang.T("app.newBox"), null, (_, _) => _manager!.CreateBox());
         menu.Items.Add(Lang.T("app.sortIntoBoxesBy"), null, (_, _) => AutoOrganize());
         menu.Items.Add(Lang.T("app.lineUpLeft"), null, (_, _) => _manager!.ArrangeBoxes(fromRight: false));
@@ -233,6 +253,20 @@ public partial class App : Application
         return menu;
     }
 
+    private SettingsWindow? _settingsWindow;
+
+    public void OpenSettings()
+    {
+        if (_settingsWindow != null)
+        {
+            _settingsWindow.Activate();
+            return;
+        }
+        _settingsWindow = new SettingsWindow(_manager!, ChangeLanguage, RestoreIcons);
+        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+        _settingsWindow.Show();
+    }
+
     private void ChangeLanguage(string? code)
     {
         Lang.Set(code);
@@ -241,6 +275,13 @@ public partial class App : Application
         var old = _tray!.ContextMenuStrip;
         _tray.ContextMenuStrip = CreateMenu();
         old?.Dispose();
+
+        if (_settingsWindow != null)
+        {
+            _settingsWindow.Close();
+            _settingsWindow = null;
+            OpenSettings();
+        }
     }
 
     private void ShowBalloon(string title, string text) =>

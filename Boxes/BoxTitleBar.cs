@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -54,6 +54,7 @@ public sealed class BoxTitleBar : DesktopLevelWindow
     public event Action? NewBoxRequested;
     public event Action? StyleRequested;
     public event Action<bool>? ArrangeRequested;
+    public event Action? SettingsRequested;
 
     public BoxTitleBar(BoxModel model)
     {
@@ -167,6 +168,7 @@ public sealed class BoxTitleBar : DesktopLevelWindow
         menu.Items.Add(MenuItem(Lang.T("box.lineUpAllRight"), () => ArrangeRequested?.Invoke(true)));
         menu.Items.Add(new Separator());
         menu.Items.Add(MenuItem(Lang.T("app.newBox"), () => NewBoxRequested?.Invoke()));
+        menu.Items.Add(MenuItem(Lang.T("app.settings"), () => SettingsRequested?.Invoke()));
         menu.Items.Add(MenuItem(Lang.T("box.deleteThisBoxIcons"),
             () => DeleteRequested?.Invoke()));
         return menu;
