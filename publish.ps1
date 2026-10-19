@@ -1,11 +1,20 @@
-# Builds the release: a single self-contained exe plus README, zipped for handing out.
-# Output: dist\TidyDesktop-<version>-win-x64.zip
+# Builds both releases from the same exe:
+#   dist\TidyDesktop-<version>-win-x64.zip   single exe plus README, for GitHub
+#   dist\TidyDesktop-<version>-win-x64.msix  unsigned package for the Microsoft Store
+# The Store re-signs the package, so it is uploaded unsigned. Pass the three values shown under
+# Partner Center > Product identity; the defaults are placeholders and the Store will reject them.
+param(
+    [string]$IdentityName = '404Architect.TidyDesktop',
+    [string]$Publisher = 'CN=404Architect',
+    [string]$PublisherDisplayName = '404 Architect',
+    [string]$OutDir = 'dist'
+)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
 $version = ([xml](Get-Content TidyDesktop.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
 $name = "TidyDesktop-$version-win-x64"
-$out = Join-Path dist $name
+$out = Join-Path $OutDir $name
 
 dotnet publish -c Release -r win-x64 --self-contained true `
     -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true `
@@ -27,7 +36,28 @@ foreach ($readme in Get-ChildItem dist-files -Filter 'README*.txt') {
         Set-Content (Join-Path $out $readme.Name) -Encoding utf8BOM
 }
 
-$zip = Join-Path dist "$name.zip"
+$zip = Join-Path $OutDir "$name.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path (Join-Path $out '*') -DestinationPath $zip
 Get-Item $zip | Select-Object FullName, @{ n = 'MB'; e = { [math]::Round($_.Length / 1MB, 1) } }
+
+# --- Microsoft Store package (MSIX) ---
+$makeappx = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\makeappx.exe" -ErrorAction SilentlyContinue |
+    Sort-Object { [version]$_.Directory.Parent.Name } -Descending | Select-Object -First 1
+if (-not $makeappx) { Write-Warning "Windows SDK (makeappx.exe) not found - skipped the MSIX package."; return }
+
+$stage = Join-Path obj msix-stage
+if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+New-Item -ItemType Directory -Force $stage | Out-Null
+Copy-Item (Join-Path obj publish-release TidyDesktop.exe) $stage
+Copy-Item Package\Assets (Join-Path $stage Assets) -Recurse
+(Get-Content Package\AppxManifest.xml -Raw).
+    Replace('{IDENTITY_NAME}', $IdentityName).Replace('{PUBLISHER}', $Publisher).
+    Replace('{PUBLISHER_DISPLAY_NAME}', $PublisherDisplayName).Replace('{VERSION}', "$version.0") |
+    Set-Content (Join-Path $stage AppxManifest.xml) -Encoding utf8
+
+$msix = Join-Path $OutDir "$name.msix"
+if (Test-Path $msix) { Remove-Item $msix -Force }
+& $makeappx.FullName pack /d $stage /p $msix /o | Out-Host
+if ($LASTEXITCODE -ne 0) { throw "makeappx failed" }
+Get-Item $msix | Select-Object FullName, @{ n = 'MB'; e = { [math]::Round($_.Length / 1MB, 1) } }
