@@ -34,7 +34,7 @@
 - **Recent Desktop Changes**: Live history tracking of new, deleted, or moved files on the desktop, with one-click **Undo** for rule actions.
 - **Layout Snapshots**: Automated backups every 30 minutes and before any major change so you can restore any previous layout instantly.
 - **Double-Click Hide**: Double-click an empty area of the desktop to quickly hide all boxes and icons, and double-click again to bring them back.
-- **Deep Customization**: Adjust box background color, opacity, title, sorting order, and grid snapping (Hold `Shift` while dragging).
+- **Deep Customization**: Adjust box background color, opacity, title, sorting order, and magnetic snapping to other boxes and screen edges while dragging (hold `Alt` to place freely).
 
 ---
 

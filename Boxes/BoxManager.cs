@@ -42,6 +42,9 @@ internal sealed class BoxManager : IDisposable
     private RuleEngine? _ruleEngine;
     private HistoryPanel? _historyPanel;
 
+    /// <summary>Opens the desktop above all windows; set up by <see cref="Start"/>.</summary>
+    public PanelLauncher? Panel { get; private set; }
+
     /// <summary>A short message to show the user (title, text), for example after a rule moved a file.</summary>
     public event Action<string, string>? Notify;
     public event Action? SettingsRequested;
@@ -72,6 +75,11 @@ internal sealed class BoxManager : IDisposable
         public RECT Target { get; set; }
         public DateTime StartedAt { get; } = DateTime.Now;
         public int Frames { get; set; }
+        public required BoxSnapper Snapper { get; init; }
+        public IReadOnlyList<RECT> Guides { get; set; } = Array.Empty<RECT>();
+
+        /// <summary>The size in icon cells, shown on the outline while resizing.</summary>
+        public string? Label { get; set; }
     }
 
     /// <summary>This is the first time TidyDesktop runs on this PC.</summary>
@@ -116,6 +124,7 @@ internal sealed class BoxManager : IDisposable
         _watcher.Renamed += OnItemRenamed;
         if (_config.HistoryPanel.Visible)
             ShowHistoryPanel();
+        Panel = new PanelLauncher(_config.Panel, PanelContent, Save);
 
         // Icons hidden when the app last closed (or crashed) are shown again.
         if (_config.IconsHidden)
@@ -221,6 +230,25 @@ internal sealed class BoxManager : IDisposable
     }
 
     public bool DesktopHidden => _desktopHidden;
+
+    /// <summary>The boxes and the items outside them, as the latest sync saw them.</summary>
+    private PanelContent PanelContent()
+    {
+        if (_lastIcons == null && _icons != null)
+            KeepSnapshot(_icons.Snapshot());
+        var icons = _lastIcons ?? new Dictionary<string, DesktopIcon>();
+        string Name(string key) => icons.TryGetValue(key, out var icon) ? icon.DisplayName : Path.GetFileName(key);
+
+        var boxed = _views.SelectMany(v => v.Model.Items).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var boxes = _views
+            .Select(v => new PanelBox(v.Model, v.Model.Items.Select(key => new PanelItem(key, Name(key), null)).ToList()))
+            .ToList();
+        var loose = icons.Values
+            .Where(icon => !boxed.Contains(icon.Key))
+            .Select(icon => new PanelItem(icon.Key, icon.DisplayName, icon.Position))
+            .ToList();
+        return new PanelContent(boxes, loose, _icons?.Spacing ?? new POINT(96, 96));
+    }
 
     /// <summary>Stores the language and redraws the text that is already on screen.</summary>
     public void SetLanguage(string? code)
@@ -510,6 +538,7 @@ internal sealed class BoxManager : IDisposable
             // The outline is owned by the old Progman; a new one is made on the next drag.
             _preview?.Dispose();
             _preview = null;
+            DisposeGuides();
             foreach (var view in _views)
                 view.Reattach(_host!);
             _historyPanel?.AttachTo(_host!.Owner);
@@ -617,13 +646,7 @@ internal sealed class BoxManager : IDisposable
 
         view.Title.DragStarted += () => BeginInteraction(view);
         view.Title.Dragging += (dx, dy) =>
-        {
-            var (x, y) = (model.X + dx, model.Y + dy);
-            // Holding Shift lines boxes up on a grid.
-            if (NativeMethods.IsShiftDown())
-                (x, y) = (Snap(x, view), Snap(y, view));
-            UpdateTarget(view, Bounds(x, y, model.Width, view.VisibleHeight));
-        };
+            UpdateTarget(view, Bounds(model.X + dx, model.Y + dy, model.Width, view.VisibleHeight), edge: null);
         view.Title.DragEnded += () => EndInteraction(view);
 
         foreach (var grip in view.Grips)
@@ -632,26 +655,15 @@ internal sealed class BoxManager : IDisposable
             grip.DragStarted += () => BeginInteraction(view);
             grip.Dragging += (dx, dy) =>
             {
-                var snap = NativeMethods.IsShiftDown();
                 var (left, right, bottom) = (model.X, model.X + model.Width, model.Y + model.Height);
                 if (edge.HasFlag(ResizeEdge.Right))
-                    right = snap ? Snap(right + dx, view) : right + dx;
+                    right += dx;
                 // The right edge stays put while the left edge follows the pointer.
                 if (edge.HasFlag(ResizeEdge.Left))
-                    left = snap ? Snap(left + dx, view) : left + dx;
+                    left += dx;
                 if (edge.HasFlag(ResizeEdge.Bottom))
-                    bottom = snap ? Snap(bottom + dy, view) : bottom + dy;
-
-                var minWidth = view.Px(160);
-                if (right - left < minWidth)
-                {
-                    if (edge.HasFlag(ResizeEdge.Left))
-                        left = right - minWidth;
-                    else
-                        right = left + minWidth;
-                }
-                var height = Math.Max(view.Px(110), bottom - model.Y);
-                UpdateTarget(view, Bounds(left, model.Y, right - left, height));
+                    bottom += dy;
+                UpdateTarget(view, Bounds(left, model.Y, right - left, bottom - model.Y), edge);
             };
             grip.DragEnded += () => EndInteraction(view);
         }
@@ -681,15 +693,6 @@ internal sealed class BoxManager : IDisposable
         view.Title.DeleteRequested += () => DeleteBox(view);
     }
 
-    /// <summary>Grid spacing for Shift-dragging, in device-independent pixels.</summary>
-    private const int GridDip = 20;
-
-    private static int Snap(int value, BoxView view)
-    {
-        var grid = Math.Max(1, view.Px(GridDip));
-        return (int)Math.Round(value / (double)grid) * grid;
-    }
-
     private static RECT Bounds(int x, int y, int width, int height) =>
         new() { Left = x, Top = y, Right = x + width, Bottom = y + height };
 
@@ -705,7 +708,12 @@ internal sealed class BoxManager : IDisposable
             return;
 
         var model = view.Model;
-        _interaction = new Interaction { View = view, Target = Bounds(model.X, model.Y, model.Width, view.VisibleHeight) };
+        _interaction = new Interaction
+        {
+            View = view,
+            Target = Bounds(model.X, model.Y, model.Width, view.VisibleHeight),
+            Snapper = CreateSnapper(view),
+        };
         _interacting = true;
         view.SetDimmed(true);
 
@@ -716,12 +724,120 @@ internal sealed class BoxManager : IDisposable
         _preview.Show(_interaction.Target, Mix(0.15), Mix(0.3), Mix(0.75), view.TitleHeight, view.Px(8));
     }
 
-    private void UpdateTarget(BoxView view, RECT target)
+    private BoxSnapper CreateSnapper(BoxView view)
+    {
+        var others = _views
+            .Where(v => v != view && !v.Hidden)
+            .Select(v => Bounds(v.Model.X, v.Model.Y, v.Model.Width, v.VisibleHeight))
+            .ToList();
+        BoxSnapper.Cells? cells = null;
+        try
+        {
+            if (_icons != null)
+                cells = CellsFor(view);
+        }
+        catch (COMException ex)
+        {
+            AppData.Log($"Icon size unavailable for snapping: {ex.Message}");
+        }
+        return new BoxSnapper(others, cells, dip => view.Px(dip));
+    }
+
+    // The same measures Grid() and AutoOrganize lay icons out with.
+    private BoxSnapper.Cells CellsFor(BoxView view) =>
+        new(_icons!.ItemBox.Width, view.Px(IconGapDip), view.Px(6), _icons.Spacing.Y, view.TitleHeight, view.Px(10));
+
+    /// <summary>
+    /// Shrinks a box to its icons in whole cells. It keeps its number of columns while they are all
+    /// used, and gains columns rather than grow taller than <paramref name="maxHeight"/>.
+    /// </summary>
+    private void FitToContents(BoxView view, int maxHeight)
+    {
+        var model = view.Model;
+        if (model.Locked)
+            return;
+        var cells = CellsFor(view);
+        var count = model.Items.Count;
+        var columns = Math.Clamp(Grid(view).Columns, 1, Math.Max(1, count));
+        int Rows() => Math.Max(1, (count + columns - 1) / columns);
+        while (columns < count && cells.HeightFor(Rows()) > maxHeight)
+            columns++;
+        model.Width = Math.Max(view.Px(BoxSnapper.MinWidthDip), cells.WidthFor(columns));
+        // A rolled-up box keeps the height it unrolls to.
+        if (!model.Collapsed)
+            model.Height = Math.Max(view.Px(BoxSnapper.MinHeightDip), cells.HeightFor(Rows()));
+    }
+
+    /// <summary>
+    /// The first place, leftmost and then topmost, where a box of this size fits inside
+    /// <paramref name="area"/> at least <paramref name="gap"/> away from every placed box.
+    /// Tried at the area's corner and against the right and bottom sides of placed boxes, so boxes
+    /// fill the gaps beside and under each other.
+    /// </summary>
+    private static RECT? FindSpot(RECT area, IReadOnlyList<RECT> placed, int width, int height, int gap)
+    {
+        var xs = placed.Select(p => p.Right + gap).Prepend(area.Left).Distinct().OrderBy(x => x).ToList();
+        var ys = placed.SelectMany(p => new[] { p.Top, p.Bottom + gap }).Prepend(area.Top).Distinct().OrderBy(y => y).ToList();
+        foreach (var x in xs)
+        {
+            foreach (var y in ys)
+            {
+                var spot = Bounds(x, y, width, height);
+                if (spot.Left < area.Left || spot.Top < area.Top || spot.Right > area.Right || spot.Bottom > area.Bottom)
+                    continue;
+                if (!placed.Any(p => Intersects(spot, new RECT
+                    {
+                        Left = p.Left - gap, Top = p.Top - gap, Right = p.Right + gap, Bottom = p.Bottom + gap,
+                    })))
+                    return spot;
+            }
+        }
+        return null;
+    }
+
+    // Swaps left and right, so packing from the right edge is packing from the left in a mirror.
+    private static RECT Mirror(RECT r) => new() { Left = -r.Right, Top = r.Top, Right = -r.Left, Bottom = r.Bottom };
+
+    /// <param name="edge">The edge being dragged when resizing; null when moving.</param>
+    private void UpdateTarget(BoxView view, RECT target, ResizeEdge? edge)
     {
         if (_interaction?.View != view)
             return;
-        _interaction.Target = target;
+        // Holding Alt places the box exactly where it is dropped.
+        var magnetic = !NativeMethods.IsAltDown();
+        var snapped = edge is { } e
+            ? _interaction.Snapper.Resize(target, e, magnetic)
+            : _interaction.Snapper.Move(target, magnetic);
+        _interaction.Target = snapped.Bounds;
+        _interaction.Guides = snapped.Guides;
+        _interaction.Label = snapped.Label;
         RequestFrame();
+    }
+
+    // Lines showing what a dragged box lined up with: at most one across and one down.
+    private readonly PreviewWindow?[] _guides = new PreviewWindow?[2];
+    private const int GuideRgb = 0x4FC3F7;
+
+    private void ShowGuides(IReadOnlyList<RECT> guides)
+    {
+        for (var i = 0; i < _guides.Length; i++)
+        {
+            if (i >= guides.Count)
+                _guides[i]?.Hide();
+            else if (_guides[i] is { } guide)
+                guide.Move(guides[i]);
+            else if (_host != null)
+                (_guides[i] = new PreviewWindow(_host.Owner)).Show(guides[i], GuideRgb, GuideRgb, GuideRgb, 0, 0);
+        }
+    }
+
+    private void DisposeGuides()
+    {
+        for (var i = 0; i < _guides.Length; i++)
+        {
+            _guides[i]?.Dispose();
+            _guides[i] = null;
+        }
     }
 
     /// <summary>
@@ -740,6 +856,8 @@ internal sealed class BoxManager : IDisposable
                 return;
             _interaction.Frames++;
             _preview?.Move(_interaction.Target);
+            _preview?.SetLabel(_interaction.Label);
+            ShowGuides(_interaction.Guides);
         });
     }
 
@@ -781,6 +899,7 @@ internal sealed class BoxManager : IDisposable
 
         // The outline stays until the box and its icons are in place, so nothing flickers in between.
         _preview?.Hide();
+        ShowGuides(Array.Empty<RECT>());
         view.SetDimmed(false);
         _interacting = _interaction != null;
         AppData.Log($"Drag '{model.Title}': {seconds:F1}s frames={interaction.Frames} " +
@@ -830,8 +949,8 @@ internal sealed class BoxManager : IDisposable
     }
 
     /// <summary>
-    /// Stacks the boxes on each screen into columns from the left or right edge, keeping their
-    /// current order. Desktop icons that would end up under a box are moved to the left edge.
+    /// Shrinks every box to its icons and packs the boxes on each screen tightly against the left
+    /// or right edge, without gaps. Desktop icons that would end up under a box are moved to the left edge.
     /// </summary>
     public void ArrangeBoxes(bool fromRight)
     {
@@ -853,28 +972,37 @@ internal sealed class BoxManager : IDisposable
             // On the main screen keep the leftmost column free for icons that are not in a box.
             var reserved = screen.Primary && !fromRight ? spacing.X + margin : 0;
 
-            var ordered = group
-                .OrderBy(v => fromRight ? -(v.Model.X + v.Model.Width) : v.Model.X)
-                .ThenBy(v => v.Model.Y)
-                .ToList();
-            var edge = fromRight ? area.Right - margin : area.Left + margin + reserved;
-            var y = area.Top + margin;
-            var columnWidth = 0;
-            foreach (var view in ordered)
+            var room = new RECT
             {
-                var height = view.VisibleHeight;
-                if (y + height > area.Bottom - margin && y > area.Top + margin)
+                Left = area.Left + margin + reserved,
+                Top = area.Top + margin,
+                Right = area.Right - margin,
+                Bottom = area.Bottom - margin,
+            };
+            foreach (var view in group)
+                FitToContents(view, room.Bottom - room.Top);
+
+            // Packed like falling blocks, the tallest first, which leaves the fewest holes. Locked
+            // boxes stay where they are and the others fit around them.
+            RECT Flip(RECT r) => fromRight ? Mirror(r) : r;
+            var placed = group.Where(v => v.Model.Locked)
+                .Select(v => Flip(Bounds(v.Model.X, v.Model.Y, v.Model.Width, v.VisibleHeight)))
+                .ToList();
+            foreach (var view in group.Where(v => !v.Model.Locked)
+                         .OrderByDescending(v => v.VisibleHeight).ThenByDescending(v => v.Model.Width))
+            {
+                if (FindSpot(Flip(room), placed, view.Model.Width, view.VisibleHeight, gap) is not { } spot)
                 {
-                    edge += fromRight ? -(columnWidth + gap) : columnWidth + gap;
-                    y = area.Top + margin;
-                    columnWidth = 0;
+                    AppData.Log($"No room for '{view.Model.Title}' when lining up; left where it was");
+                    placed.Add(Flip(Bounds(view.Model.X, view.Model.Y, view.Model.Width, view.VisibleHeight)));
+                    continue;
                 }
-                view.Model.X = fromRight ? edge - view.Model.Width : edge;
-                view.Model.Y = y;
-                view.ApplyBounds();
-                y += height + gap;
-                columnWidth = Math.Max(columnWidth, view.Model.Width);
+                placed.Add(spot);
+                var bounds = Flip(spot);
+                (view.Model.X, view.Model.Y) = (bounds.Left, bounds.Top);
             }
+            foreach (var view in group)
+                view.ApplyBounds();
         }
         batch.Dispose();
 
@@ -1114,6 +1242,18 @@ internal sealed class BoxManager : IDisposable
     /// Items with no category (Recycle Bin, This PC) are lined up at the left edge of the main screen.
     /// </summary>
     /// <returns>How many icons were sorted into boxes.</returns>
+    /// <summary>
+    /// Everything in one go: sorts loose icons into boxes by kind, then shrinks the boxes to their
+    /// icons and packs them against the left edge.
+    /// </summary>
+    /// <returns>How many icons were put in boxes.</returns>
+    public int TidyUp()
+    {
+        var sorted = AutoOrganize();
+        ArrangeBoxes(fromRight: false);
+        return sorted;
+    }
+
     public int AutoOrganize()
     {
         if (_icons == null)
@@ -1392,6 +1532,7 @@ internal sealed class BoxManager : IDisposable
         _watcher?.Dispose();
         _moves?.Dispose();
         _historyPanel?.Close();
+        Panel?.Dispose();
         // Never leave the desktop without icons when the app closes.
         if (_desktopHidden || _config.IconsHidden)
             SetIconsHidden(false);
@@ -1399,6 +1540,7 @@ internal sealed class BoxManager : IDisposable
             view.Dispose();
         _views.Clear();
         _preview?.Dispose();
+        DisposeGuides();
         _lastSnapshot?.Dispose();
     }
 }

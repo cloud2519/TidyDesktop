@@ -59,27 +59,37 @@ internal static class Categorizer
         (Games, new[] { "steam", "nintendo", "epic games", "battle.net", "riot", "league of legends",
             "wallpaper engine", "ubisoft", "ea app", "ea sports", "xbox", "minecraft", "gog galaxy", "game",
             "roblox", "fifa", "battlefront", "star wars", "witcher", "nexon", "넥슨", "nkstarter",
-            "lossless scaling", "red dead", "rockstar" }),
+            "lossless scaling", "red dead", "rockstar", "blizzard", "블리자드", "배틀그라운드", "pubg", "lol",
+            "리그 오브 레전드", "로스트아크", "lost ark", "메이플", "maplestory", "던전앤파이터", "오버워치",
+            "overwatch", "valorant", "발로란트", "fc online", "stove", "스토브", "카카오게임즈",
+            "genshin", "원신", "hoyoplay", "playnite" }),
         (Finance, new[] { "영웅문", "creon", "크레온", "efriend", "챔피언", "키움", "kiwoom", "증권", "hts",
             "미래에셋", "삼성증권", "나무증권", "유안타", "이베스트", "업비트", "upbit", "빗썸", "bithumb",
-            "tradingview", "트레이딩뷰" }),
+            "tradingview", "트레이딩뷰", "한국투자", "nh투자", "kb증권", "대신증권", "신한투자", "한화투자",
+            "토스", "코인원", "코빗", "바이낸스", "binance", "국민은행", "kb국민", "신한은행", "하나은행",
+            "우리은행", "농협", "카카오뱅크", "케이뱅크", "홈택스", "hometax" }),
         (Dev, new[] { "cursor", "antigravity", "dbeaver", "heidisql", "visual studio", "vscode", "code.exe",
             "github", "git bash", "postman", "docker", "jetbrains", "intellij", "pycharm", "android studio",
-            "comfy", "sql", "python", "node.js" }),
+            "comfy", "sql", "mysql", "ssms", "python", "node.js", "notepad++", "sublime", "unity hub",
+            "unreal", "eclipse", "putty", "filezilla", "winscp", "wsl", "ubuntu" }),
         (Media, new[] { "팟플레이어", "potplayer", "vlc", "obs studio", "obs64", "내 obs", "ocam", "샤나인코더",
             "nero", "4k video", "elgato", "stream deck", "camera hub", "broadcast", "픽픽", "picpick", "fxsound",
             "spotify", "melon", "premiere", "davinci", "capcut", "vrew", "submaker", "audacity", "handbrake",
-            "kmplayer", "곰플레이어" }),
+            "kmplayer", "곰플레이어", "반디캠", "bandicam", "곰캠", "곰오디오", "알씨", "alsee", "꿀뷰",
+            "honeyview", "photoshop", "포토샵", "lightroom", "illustrator", "gimp", "paint.net", "clip studio" }),
         (Internet, new[] { "chrome", "firefox", "opera", "whale", "웨일", "msedge", "microsoft edge",
             "tor browser", "comet", "brave", "zoom", "카카오톡", "kakaotalk", "discord", "telegram", "slack",
-            "teams", "gemini", "chatgpt", "claude", "naver", "네이버", "vpn" }),
+            "teams", "gemini", "chatgpt", "claude", "naver", "네이버", "vpn", "nordvpn", "expressvpn",
+            "protonvpn", "google", "구글", "youtube", "유튜브", "webex", "웹엑스" }),
         (Office, new[] { "한글", "한셀", "한쇼", "한워드", "한pdf", "hwp", "hancom", "winword", "microsoft word",
             "excel", "powerpnt", "powerpoint", "outlook", "onenote", "foxit", "acrobat", "pdf", "notion",
-            "ebook", "yes24", "evernote", "obsidian" }),
+            "ebook", "yes24", "evernote", "obsidian", "한컴", "엑셀", "파워포인트", "libreoffice",
+            "wps office", "폴라리스", "polaris office", "pdfgear" }),
         (System, new[] { "nvidia", "intel", "gpu-z", "techpowerup", "afterburner", "msi", "seatools",
             "aomei", "backup", "백업", "everything", "synology", "zoomit", "7-zip", "bandizip",
             "ccleaner", "groupy", "stardock", "goodbyedpi", "rufus", "cpu-z", "hwmonitor", "control panel",
-            "제어판", "terminal", "powershell", "logitech", "g hub", "uninstall", "제거", "autohotkey" }),
+            "제어판", "terminal", "powershell", "logitech", "g hub", "uninstall", "제거", "autohotkey",
+            "알약", "v3", "geforce", "radeon", "amd software", "crystaldisk", "hwinfo", "드라이버" }),
     };
 
     private static readonly Dictionary<string, Category> Extensions = BuildExtensions();
@@ -142,7 +152,7 @@ internal static class Categorizer
         var haystack = $"{name} {targetName}".ToLowerInvariant();
         foreach (var (category, keywords) in AppKeywords)
         {
-            if (keywords.Any(haystack.Contains))
+            if (keywords.Any(keyword => Contains(haystack, keyword)))
                 return category;
         }
 
@@ -162,6 +172,25 @@ internal static class Categorizer
         if (Extensions.TryGetValue(Path.GetExtension(target), out var byTarget) && byTarget != Apps)
             return byTarget;
         return Apps;
+    }
+
+    /// <summary>
+    /// Whether the name contains the keyword. Short Latin keywords ("hts", "msi") only count as whole
+    /// words: inside longer words they turn up in unrelated names ("Highlights", "Rights").
+    /// </summary>
+    private static bool Contains(string haystack, string keyword)
+    {
+        if (keyword.Length > 3 || !keyword.All(char.IsAsciiLetterOrDigit))
+            return haystack.Contains(keyword, StringComparison.Ordinal);
+        for (var i = haystack.IndexOf(keyword, StringComparison.Ordinal); i >= 0;
+             i = haystack.IndexOf(keyword, i + 1, StringComparison.Ordinal))
+        {
+            var end = i + keyword.Length;
+            if ((i == 0 || !char.IsAsciiLetterOrDigit(haystack[i - 1])) &&
+                (end == haystack.Length || !char.IsAsciiLetterOrDigit(haystack[end])))
+                return true;
+        }
+        return false;
     }
 
     private static string? ReadUrl(string path)

@@ -76,6 +76,18 @@ public sealed class AppConfig
     public List<FileRule> Rules { get; set; } = new();
 
     public HistoryPanelSettings HistoryPanel { get; set; } = new();
+
+    public PanelSettings Panel { get; set; } = new();
+}
+
+/// <summary>How the desktop panel (the desktop shown above all windows) is opened.</summary>
+public sealed class PanelSettings
+{
+    /// <summary>System-wide shortcut such as "Ctrl+Alt+D"; empty turns it off.</summary>
+    public string Hotkey { get; set; } = "Ctrl+Alt+D";
+
+    /// <summary>Resting the pointer in a screen's top-left corner opens the panel.</summary>
+    public bool HotCorner { get; set; }
 }
 
 /// <summary>Where the "recent changes" panel sits, in physical pixels; zero size means not placed yet.</summary>

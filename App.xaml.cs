@@ -75,6 +75,8 @@ public partial class App : Application
             Updater.CleanUp();
         if (afterUpdate)
             ShowBalloon(Lang.T("update.done", Version), Lang.T("update.doneText"));
+        else if (_manager.Panel is { HotkeyWorks: false, Hotkey: { Length: > 0 } hotkey })
+            ShowBalloon(Lang.T("app.panelHotkeyTaken", hotkey), Lang.T("app.panelHotkeyTakenText"));
         // Notifications can be turned off, so the first run says hello in a window that cannot be missed.
         if (_manager.IsFirstRun)
         {
@@ -94,7 +96,7 @@ public partial class App : Application
                 }
                 if (welcome.ShouldAutoOrganize)
                 {
-                    _manager.AutoOrganize();
+                    _manager.TidyUp();
                 }
             }
         }
@@ -260,6 +262,14 @@ public partial class App : Application
             }
         });
         menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add(new Forms.ToolStripMenuItem(Lang.T("app.tidyUp"), null, (_, _) => TidyUp())
+        {
+            Font = new System.Drawing.Font(menu.Font, System.Drawing.FontStyle.Bold),
+        });
+        var panel = new Forms.ToolStripMenuItem(Lang.T("app.openPanel"));
+        panel.Click += (_, _) => _manager!.Panel?.Toggle();
+        menu.Items.Add(panel);
+        menu.Opening += (_, _) => panel.ShortcutKeyDisplayString = _manager!.Panel?.Hotkey;
         menu.Items.Add(Lang.T("app.settings"), null, (_, _) => OpenSettings());
         menu.Items.Add(Lang.T("app.newBox"), null, (_, _) => _manager!.CreateBox());
         menu.Items.Add(Lang.T("app.sortIntoBoxesBy"), null, (_, _) => AutoOrganize());
@@ -409,6 +419,17 @@ public partial class App : Application
                     _manager!.RestoreSnapshot(path);
             });
         }
+    }
+
+    private void TidyUp()
+    {
+        var answer = MessageBox.Show(
+            Lang.T("app.tidyUpConfirm"),
+            "TidyDesktop", MessageBoxButton.OKCancel, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.OK)
+            return;
+        var sorted = _manager!.TidyUp();
+        ShowBalloon(Lang.T("app.tidiedUp"), Lang.T("app.tidiedUpText", sorted));
     }
 
     private void AutoOrganize()

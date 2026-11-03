@@ -32,7 +32,7 @@ Put TidyDesktop.exe in any folder (Documents, for example) and run it. There is 
 - Tray menu > "Sort into boxes by kind": icons are sorted into Web, Office, Games, Pictures, Documents … boxes.
 - Drag an icon into a box to add it; drag it out to take it out.
 - Drag a box's title to move the box. Drag its left, right or bottom edge to resize it.
-  Hold Shift while dragging to snap to a grid.
+  Boxes snap to other boxes and the screen edges as you drag; hold Alt to place freely.
 - Double-click a box's title to roll it up or unroll it.
 - Right-click a box's title for: Customize (name, color, opacity), Rename, Sort, Lock position, Delete, and more.
 - Recent changes box: shows files added to, removed from or renamed on the desktop.

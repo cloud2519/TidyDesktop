@@ -196,5 +196,21 @@
   "update.downloadingText": "TidyDesktop will close for a moment and start again with the new version.",
   "update.done": "Updated to TidyDesktop {0}",
   "update.doneText": "Your boxes and settings are unchanged.",
-  "update.failed": "Could not update.\n\n{0}\n\nOpen the download page?"
+  "update.failed": "Could not update.\n\n{0}\n\nOpen the download page?",
+  "app.openPanel": "Show desktop panel",
+  "app.panelHotkeyTaken": "The shortcut {0} is not available",
+  "app.panelHotkeyTakenText": "Another program is already using it. Choose a different one in Settings.",
+  "panel.search": "Find by name…",
+  "panel.hint": "Click or press Enter to open · Esc or click empty space to close",
+  "settings.panelHotkey": "Desktop panel shortcut",
+  "settings.panelHotkeyHint": "Press the keys you want (Backspace: off)",
+  "settings.panelHotkeyOff": "Off",
+  "settings.panelHotkeyTaken": "Used by another program",
+  "settings.panelHotCorner": "Open the desktop panel when the pointer rests in a screen's top-left corner",
+  "app.tidyUp": "Tidy up everything",
+  "app.tidyUpConfirm": "Tidies the desktop in one go:\n\n1. Icons outside boxes go into boxes by kind (internet, finance, documents …).\n2. Boxes shrink to fit their icons and are packed from the left without gaps.\n\nThe current layout is saved first, so 'Go back to a saved layout' can always undo this. Continue?",
+  "app.tidiedUp": "Desktop tidied",
+  "app.tidiedUpText": "Put {0} icons in boxes and packed the boxes.",
+  "settings.tidyUpBtn": "✨ Tidy up everything",
+  "settings.tidyUpHint": "Sorts icons into boxes by kind, then shrinks and packs the boxes"
 }

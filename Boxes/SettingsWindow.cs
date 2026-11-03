@@ -2,7 +2,9 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
+using TidyDesktop.Native;
 
 namespace TidyDesktop.Boxes;
 
@@ -114,6 +116,8 @@ internal sealed class SettingsWindow : Window
         };
         _historyCheck.Click += (_, _) => _manager.SetHistoryPanelVisible(_historyCheck.IsChecked == true);
         behaviorCard.Inner.Children.Add(_historyCheck);
+        if (_manager.Panel is { } panel)
+            AddPanelSettings(behaviorCard.Inner, panel);
         root.Children.Add(behaviorCard.Element);
 
         // 3. Boxes & Layout Section
@@ -121,6 +125,14 @@ internal sealed class SettingsWindow : Window
         var layoutCard = CreateCard();
 
         var actionButtons = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var tidyUp = Button(Lang.T("settings.tidyUpBtn"), () =>
+        {
+            _manager.TidyUp();
+            RefreshSnapshots();
+        });
+        tidyUp.FontWeight = FontWeights.SemiBold;
+        tidyUp.ToolTip = Lang.T("settings.tidyUpHint");
+        actionButtons.Children.Add(tidyUp);
         actionButtons.Children.Add(Button(Lang.T("settings.autoOrganizeBtn"), () =>
         {
             _manager.AutoOrganize();
@@ -191,6 +203,87 @@ internal sealed class SettingsWindow : Window
 
         Content = root;
         RefreshSnapshots();
+    }
+
+    /// <summary>The shortcut and hot corner that open the desktop panel.</summary>
+    private static void AddPanelSettings(Panel card, PanelLauncher panel)
+    {
+        var row = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
+        var label = new TextBlock
+        {
+            Text = Lang.T("settings.panelHotkey"),
+            VerticalAlignment = VerticalAlignment.Center,
+            FontWeight = FontWeights.Medium,
+            Margin = new Thickness(0, 0, 16, 0),
+        };
+        DockPanel.SetDock(label, Dock.Left);
+        row.Children.Add(label);
+        var input = new TextBox
+        {
+            Width = 160,
+            IsReadOnly = true,
+            IsReadOnlyCaretVisible = false,
+            Padding = new Thickness(4, 3, 4, 3),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            ToolTip = Lang.T("settings.panelHotkeyHint"),
+        };
+        DockPanel.SetDock(input, Dock.Left);
+        row.Children.Add(input);
+        var status = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+        row.Children.Add(status);
+
+        void ShowCurrent()
+        {
+            input.Text = panel.Hotkey.Length > 0 ? panel.Hotkey : Lang.T("settings.panelHotkeyOff");
+            var taken = panel.Hotkey.Length > 0 && !panel.HotkeyWorks;
+            status.Text = taken ? Lang.T("settings.panelHotkeyTaken") : "";
+            status.Foreground = Brushes.Firebrick;
+        }
+        ShowCurrent();
+        // While the box has the focus the shortcut is let go, so pressing it is recorded rather than opening the panel.
+        input.GotKeyboardFocus += (_, _) =>
+        {
+            panel.PauseHotkey(true);
+            status.Text = Lang.T("settings.panelHotkeyHint");
+            status.Foreground = Brushes.Gray;
+        };
+        input.LostKeyboardFocus += (_, _) =>
+        {
+            panel.PauseHotkey(false);
+            ShowCurrent();
+        };
+        input.PreviewKeyDown += (_, e) =>
+        {
+            var key = e.Key == Key.System ? e.SystemKey : e.Key;
+            var modifiers = Keyboard.Modifiers;
+            if (key is Key.Tab or Key.Escape && modifiers == ModifierKeys.None)
+                return;
+            e.Handled = true;
+            if (key is Key.Back or Key.Delete && modifiers == ModifierKeys.None)
+            {
+                panel.SetHotkey("");
+                input.Text = Lang.T("settings.panelHotkeyOff");
+                return;
+            }
+            // A plain letter would stop that letter from typing anywhere, so a modifier is required.
+            if (modifiers == ModifierKeys.None || GlobalHotKey.Format(key, modifiers) is not { } gesture)
+                return;
+            var works = panel.SetHotkey(gesture);
+            panel.PauseHotkey(true);
+            input.Text = gesture;
+            status.Text = works ? Lang.T("settings.panelHotkeyHint") : Lang.T("settings.panelHotkeyTaken");
+            status.Foreground = works ? Brushes.Gray : Brushes.Firebrick;
+        };
+        card.Children.Add(row);
+
+        var corner = new CheckBox
+        {
+            Content = Lang.T("settings.panelHotCorner"),
+            IsChecked = panel.HotCorner,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        corner.Click += (_, _) => panel.HotCorner = corner.IsChecked == true;
+        card.Children.Add(corner);
     }
 
     private void SelectCurrentLanguage()

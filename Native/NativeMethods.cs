@@ -163,6 +163,12 @@ internal static class NativeMethods
     }
 
     /// <summary>Physical state of either Shift key; works while another app has the keyboard focus.</summary>
+    public static bool IsAltDown()
+    {
+        const int VK_MENU = 0x12;
+        return (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+    }
+
     public static bool IsShiftDown()
     {
         const int VK_SHIFT = 0x10;

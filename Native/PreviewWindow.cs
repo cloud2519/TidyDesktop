@@ -98,6 +98,23 @@ internal sealed class PreviewWindow : IDisposable
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr GetModuleHandle(string? lpModuleName);
 
+    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr CreateFont(int height, int width, int escapement, int orientation, int weight,
+        uint italic, uint underline, uint strikeOut, uint charSet, uint outPrecision, uint clipPrecision,
+        uint quality, uint pitchAndFamily, string face);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr SelectObject(IntPtr hdc, IntPtr obj);
+
+    [DllImport("gdi32.dll")]
+    private static extern int SetBkMode(IntPtr hdc, int mode);
+
+    [DllImport("gdi32.dll")]
+    private static extern int SetTextColor(IntPtr hdc, int color);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int DrawText(IntPtr hdc, string text, int length, ref RECT rect, uint format);
+
     private static readonly WndProc SharedProc = Dispatch;
     private static readonly Dictionary<IntPtr, PreviewWindow> Windows = new();
     private static bool _registered;
@@ -110,6 +127,9 @@ internal sealed class PreviewWindow : IDisposable
     private int _radius;
     private int _width;
     private int _height;
+    private IntPtr _font;
+    private int _textColor;
+    private string? _label;
 
     public PreviewWindow(IntPtr owner)
     {
@@ -148,6 +168,14 @@ internal sealed class PreviewWindow : IDisposable
         ReplaceBrush(ref _fill, fillRgb);
         ReplaceBrush(ref _band, bandRgb);
         ReplaceBrush(ref _border, borderRgb);
+        _textColor = Gdi(borderRgb);
+        _label = null;
+        if (_font == IntPtr.Zero || bandHeight != _bandHeight)
+        {
+            if (_font != IntPtr.Zero)
+                DeleteObject(_font);
+            _font = bandHeight > 0 ? CreateFont(-bandHeight * 11 / 20, 0, 0, 0, 600, 0, 0, 0, 1, 0, 0, 5, 0, "Segoe UI") : IntPtr.Zero;
+        }
         _bandHeight = bandHeight;
         _radius = radius;
         _width = _height = 0;
@@ -168,6 +196,15 @@ internal sealed class PreviewWindow : IDisposable
             NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_NOZORDER);
     }
 
+    /// <summary>Text centered in the top band, such as the size while resizing; null for none.</summary>
+    public void SetLabel(string? label)
+    {
+        if (label == _label)
+            return;
+        _label = label;
+        InvalidateRect(_hwnd, IntPtr.Zero, false);
+    }
+
     public void Hide() =>
         NativeMethods.SetWindowPos(_hwnd, IntPtr.Zero, OffScreen, OffScreen, 1, 1,
             NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_NOZORDER);
@@ -176,9 +213,11 @@ internal sealed class PreviewWindow : IDisposable
     {
         if (brush != IntPtr.Zero)
             DeleteObject(brush);
-        // GDI colors are 0x00BBGGRR.
-        brush = CreateSolidBrush(((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF));
+        brush = CreateSolidBrush(Gdi(rgb));
     }
+
+    // GDI colors are 0x00BBGGRR.
+    private static int Gdi(int rgb) => ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF);
 
     private static IntPtr Dispatch(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
@@ -211,6 +250,16 @@ internal sealed class PreviewWindow : IDisposable
             FrameRect(dc, ref all, _border);
             var inner = new RECT { Left = 1, Top = 1, Right = _width - 1, Bottom = _height - 1 };
             FrameRect(dc, ref inner, _border);
+            if (_label != null && _font != IntPtr.Zero)
+            {
+                const int TRANSPARENT = 1;
+                const uint DT_CENTER = 0x1, DT_VCENTER = 0x4, DT_SINGLELINE = 0x20;
+                var old = SelectObject(dc, _font);
+                SetBkMode(dc, TRANSPARENT);
+                SetTextColor(dc, _textColor);
+                DrawText(dc, _label, -1, ref band, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                SelectObject(dc, old);
+            }
         }
         EndPaint(_hwnd, ref ps);
     }
@@ -228,5 +277,8 @@ internal sealed class PreviewWindow : IDisposable
                 DeleteObject(brush);
         }
         _fill = _band = _border = IntPtr.Zero;
+        if (_font != IntPtr.Zero)
+            DeleteObject(_font);
+        _font = IntPtr.Zero;
     }
 }
