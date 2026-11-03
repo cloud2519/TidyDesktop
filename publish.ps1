@@ -4,13 +4,15 @@
 # The Store re-signs the package, so it is uploaded unsigned. Pass the three values shown under
 # Partner Center > Product identity; the defaults are placeholders and the Store will reject them.
 # -Release also publishes a GitHub release (tag v<version>) with the zip and the bare exe; the app's
-# "Check for updates" downloads that exe, so every release must include it.
+# "Check for updates" downloads that exe, so every release must include it. -NotesFile gives the
+# release notes (Markdown); without it GitHub writes only a link to the list of changes.
 param(
     [string]$IdentityName = '404architect.TidyDesktop',
     [string]$Publisher = 'CN=2E8F13B0-E0F9-4256-A275-CCBA8BFA0843',
     [string]$PublisherDisplayName = '404architect',
     [string]$OutDir = 'dist',
-    [switch]$Release
+    [switch]$Release,
+    [string]$NotesFile
 )
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -18,6 +20,13 @@ Set-Location $PSScriptRoot
 $version = ([xml](Get-Content TidyDesktop.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
 $name = "TidyDesktop-$version-win-x64"
 $out = Join-Path $OutDir $name
+
+# Check what -Release needs before the build, so a mistake fails in seconds rather than minutes.
+if ($Release) {
+    if ($NotesFile -and -not (Test-Path $NotesFile)) { throw "notes file not found: $NotesFile" }
+    gh release view "v$version" *> $null
+    if ($LASTEXITCODE -eq 0) { throw "release v$version already exists; raise <Version> in TidyDesktop.csproj first" }
+}
 
 dotnet publish -c Release -r win-x64 --self-contained true `
     -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true `
@@ -45,7 +54,8 @@ Compress-Archive -Path (Join-Path $out '*') -DestinationPath $zip
 Get-Item $zip | Select-Object FullName, @{ n = 'MB'; e = { [math]::Round($_.Length / 1MB, 1) } }
 
 if ($Release) {
-    gh release create "v$version" $zip (Join-Path obj publish-release TidyDesktop.exe) --title "v$version" --generate-notes
+    $notes = if ($NotesFile) { @('--notes-file', $NotesFile) } else { @('--generate-notes') }
+    gh release create "v$version" $zip (Join-Path obj publish-release TidyDesktop.exe) --title "v$version" @notes
     if ($LASTEXITCODE -ne 0) { throw "gh release create failed" }
 }
 
