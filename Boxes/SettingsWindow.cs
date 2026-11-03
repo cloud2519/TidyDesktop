@@ -20,7 +20,8 @@ internal sealed class SettingsWindow : Window
     private readonly CheckBox _historyCheck;
     private readonly ComboBox _langCombo = new() { Width = 220, HorizontalAlignment = HorizontalAlignment.Left };
 
-    public SettingsWindow(BoxManager manager, Action<string?> changeLanguage, Action restoreOriginal)
+    /// <param name="checkForUpdates">Null for the Store build, which the Store keeps up to date.</param>
+    public SettingsWindow(BoxManager manager, Action<string?> changeLanguage, Action restoreOriginal, Action? checkForUpdates)
     {
         _manager = manager;
         _changeLanguage = changeLanguage;
@@ -167,6 +168,12 @@ internal sealed class SettingsWindow : Window
         });
         DockPanel.SetDock(folderBtn, Dock.Left);
         footer.Children.Add(folderBtn);
+        if (checkForUpdates != null)
+        {
+            var updateBtn = Button(Lang.T("update.checkBtn", App.Version), checkForUpdates);
+            DockPanel.SetDock(updateBtn, Dock.Left);
+            footer.Children.Add(updateBtn);
+        }
 
         var closeBtn = new Button
         {
@@ -292,3 +299,4 @@ internal sealed class SettingsWindow : Window
         }
     }
 }
+

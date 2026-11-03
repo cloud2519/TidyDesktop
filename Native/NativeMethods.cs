@@ -141,6 +141,19 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int nIndex);
 
+    /// <summary>
+    /// The monitor setup in a form that changes when Win+P switches modes, a monitor is plugged in
+    /// or out, or a resolution changes. Read fresh each time, unlike WinForms' cached Screen list.
+    /// </summary>
+    public static (int X, int Y, int Width, int Height, int Monitors, int PrimaryWidth, int PrimaryHeight) ScreenLayout()
+    {
+        const int SM_CXSCREEN = 0, SM_CYSCREEN = 1, SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77,
+            SM_CXVIRTUALSCREEN = 78, SM_CYVIRTUALSCREEN = 79, SM_CMONITORS = 80;
+        return (GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN),
+            GetSystemMetrics(SM_CXVIRTUALSCREEN), GetSystemMetrics(SM_CYVIRTUALSCREEN),
+            GetSystemMetrics(SM_CMONITORS), GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+    }
+
     /// <summary>Physical state of the primary mouse button, independent of any message queue.</summary>
     public static bool IsPrimaryButtonDown()
     {

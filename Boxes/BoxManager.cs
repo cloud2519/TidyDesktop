@@ -957,6 +957,8 @@ internal sealed class BoxManager : IDisposable
         // Hidden icons report no useful positions, so leave everything as it is until shown again.
         if (_interacting || _desktopHidden || DateTime.Now < _suspendSyncUntil)
             return;
+        if (WaitForScreens())
+            return;
         if (_host == null || _icons == null || !_host.IsAlive)
         {
             Reattach();
@@ -1055,6 +1057,37 @@ internal sealed class BoxManager : IDisposable
     }
 
     private HashSet<string> _missingLastSync = new(StringComparer.OrdinalIgnoreCase);
+
+    // How long the monitor setup must stay the same before the boxes are rebuilt on it.
+    private static readonly TimeSpan ScreensSettleTime = TimeSpan.FromSeconds(3);
+    private (int, int, int, int, int, int, int) _screenLayout = NativeMethods.ScreenLayout();
+    private DateTime? _screensSettleAt;
+
+    /// <summary>
+    /// Holds syncing back after the monitors change (Win+P, plugging one in or out). Explorer resizes
+    /// its desktop windows and moves icons around for a few seconds afterwards; reading the desktop
+    /// then would take explorer's moves for the user's, and the box bodies are left at their old
+    /// offsets inside the resized wallpaper window. Once the setup has settled, everything is
+    /// attached again from scratch, as on a fresh start.
+    /// </summary>
+    private bool WaitForScreens()
+    {
+        var layout = NativeMethods.ScreenLayout();
+        if (layout != _screenLayout)
+        {
+            AppData.Log($"Screens changed: {_screenLayout} -> {layout}");
+            _screenLayout = layout;
+            _screensSettleAt = DateTime.Now + ScreensSettleTime;
+            return true;
+        }
+        if (_screensSettleAt == null)
+            return false;
+        if (DateTime.Now < _screensSettleAt)
+            return true;
+        _screensSettleAt = null;
+        Reattach();
+        return _host == null;
+    }
 
     /// <summary>A plain file or folder path, as opposed to a shell item such as "::{GUID}" (This PC).</summary>
     private static bool IsFileSystemPath(string key) =>

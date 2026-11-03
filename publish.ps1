@@ -3,11 +3,14 @@
 #   dist\TidyDesktop-<version>-win-x64.msix  unsigned package for the Microsoft Store
 # The Store re-signs the package, so it is uploaded unsigned. Pass the three values shown under
 # Partner Center > Product identity; the defaults are placeholders and the Store will reject them.
+# -Release also publishes a GitHub release (tag v<version>) with the zip and the bare exe; the app's
+# "Check for updates" downloads that exe, so every release must include it.
 param(
-    [string]$IdentityName = '404Architect.TidyDesktop',
-    [string]$Publisher = 'CN=404Architect',
-    [string]$PublisherDisplayName = '404 Architect',
-    [string]$OutDir = 'dist'
+    [string]$IdentityName = '404architect.TidyDesktop',
+    [string]$Publisher = 'CN=2E8F13B0-E0F9-4256-A275-CCBA8BFA0843',
+    [string]$PublisherDisplayName = '404architect',
+    [string]$OutDir = 'dist',
+    [switch]$Release
 )
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -40,6 +43,11 @@ $zip = Join-Path $OutDir "$name.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path (Join-Path $out '*') -DestinationPath $zip
 Get-Item $zip | Select-Object FullName, @{ n = 'MB'; e = { [math]::Round($_.Length / 1MB, 1) } }
+
+if ($Release) {
+    gh release create "v$version" $zip (Join-Path obj publish-release TidyDesktop.exe) --title "v$version" --generate-notes
+    if ($LASTEXITCODE -ne 0) { throw "gh release create failed" }
+}
 
 # --- Microsoft Store package (MSIX) ---
 $makeappx = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\makeappx.exe" -ErrorAction SilentlyContinue |

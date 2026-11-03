@@ -187,5 +187,14 @@
   "settings.restoreSnapshotBtn": "선택한 배치로 되돌리기",
   "settings.about": "정보",
   "settings.openFolder": "설정 폴더 열기",
-  "settings.close": "닫기"
+  "settings.close": "닫기",
+  "update.check": "업데이트 확인…",
+  "update.checkBtn": "업데이트 확인 (현재 {0})",
+  "update.upToDate": "최신 버전({0})을 쓰고 있어요.",
+  "update.available": "새 버전 {0}이 나왔어요. (지금 버전: {1})\n\n내려받아 설치하고 TidyDesktop을 다시 시작할까요? 상자와 설정은 그대로 남아요.",
+  "update.downloading": "업데이트를 내려받는 중이에요",
+  "update.downloadingText": "다 받으면 TidyDesktop이 잠깐 꺼졌다가 새 버전으로 다시 켜져요.",
+  "update.done": "TidyDesktop {0}으로 업데이트했어요",
+  "update.doneText": "상자와 설정은 그대로예요.",
+  "update.failed": "업데이트하지 못했어요.\n\n{0}\n\n다운로드 페이지를 열까요?"
 }

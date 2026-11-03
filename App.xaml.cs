@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net.Http;
 using System.Windows;
 using TidyDesktop.Boxes;
 using Forms = System.Windows.Forms;
@@ -30,6 +31,10 @@ public partial class App : Application
         Lang.Set(AppData.LoadConfig().Language);
 
         _singleInstance = new Mutex(true, "TidyDesktop.SingleInstance", out var isFirst);
+        var afterUpdate = e.Args.Contains(AfterUpdateArg, StringComparer.OrdinalIgnoreCase);
+        // Started by an update: the old version is still closing down.
+        if (!isFirst && afterUpdate)
+            isFirst = WaitForPreviousInstance();
         if (!isFirst)
         {
             MessageBox.Show(Lang.T("app.alreadyRunning"), "TidyDesktop");
@@ -66,6 +71,10 @@ public partial class App : Application
         _manager.SettingsRequested += OpenSettings;
         _tray = CreateTray();
         AutoStart.Refresh();
+        if (!AutoStart.IsPackaged)
+            Updater.CleanUp();
+        if (afterUpdate)
+            ShowBalloon(Lang.T("update.done", Version), Lang.T("update.doneText"));
         // Notifications can be turned off, so the first run says hello in a window that cannot be missed.
         if (_manager.IsFirstRun)
         {
@@ -103,6 +112,82 @@ public partial class App : Application
     /// <summary>The version shown to users, such as "1.0.0".</summary>
     public static string Version =>
         typeof(App).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "?";
+
+    private const string AfterUpdateArg = "--after-update";
+
+    private bool WaitForPreviousInstance()
+    {
+        try
+        {
+            return _singleInstance!.WaitOne(TimeSpan.FromSeconds(20));
+        }
+        catch (AbandonedMutexException)
+        {
+            // The old version exited without releasing it; the mutex is ours now.
+            return true;
+        }
+    }
+
+    private bool _updating;
+
+    /// <summary>
+    /// Looks for a newer release on GitHub and, if the user agrees, installs it and restarts.
+    /// The Store build has no such option: the Store updates it.
+    /// </summary>
+    public async void CheckForUpdates()
+    {
+        if (_updating)
+            return;
+        _updating = true;
+        try
+        {
+            var release = await Updater.FindNewerAsync();
+            if (release == null)
+            {
+                MessageBox.Show(Lang.T("update.upToDate", Version), "TidyDesktop");
+                return;
+            }
+            var answer = MessageBox.Show(Lang.T("update.available", release.Version.ToString(3), Version),
+                "TidyDesktop", MessageBoxButton.OKCancel, MessageBoxImage.Question);
+            if (answer != MessageBoxResult.OK)
+                return;
+            if (release.DownloadUrl == null)
+            {
+                OpenUrl(Updater.ReleasesPage);
+                return;
+            }
+            ShowBalloon(Lang.T("update.downloading"), Lang.T("update.downloadingText"));
+            await Updater.InstallAsync(release);
+            Process.Start(new ProcessStartInfo(Environment.ProcessPath!, AfterUpdateArg) { UseShellExecute = false });
+            Shutdown();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.IO.IOException
+                                       or UnauthorizedAccessException or System.Text.Json.JsonException
+                                       or KeyNotFoundException or System.ComponentModel.Win32Exception)
+        {
+            AppData.Log($"Update failed: {ex}");
+            var answer = MessageBox.Show(Lang.T("update.failed", ex.Message), "TidyDesktop",
+                MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+            if (answer == MessageBoxResult.OK)
+                OpenUrl(Updater.ReleasesPage);
+        }
+        finally
+        {
+            _updating = false;
+        }
+    }
+
+    private static void OpenUrl(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            AppData.Log($"Could not open {url}: {ex.Message}");
+        }
+    }
 
     private void RunOnce(Action action)
     {
@@ -229,6 +314,8 @@ public partial class App : Application
         menu.Items.Add(autoStart);
         menu.Opening += (_, _) => autoStart.Checked = AutoStart.IsEnabled;
         menu.Items.Add(CreateLanguageMenu());
+        if (!AutoStart.IsPackaged)
+            menu.Items.Add(Lang.T("update.check"), null, (_, _) => CheckForUpdates());
         menu.Items.Add(Lang.T("app.openSettingsFolder"), null, (_, _) =>
             Process.Start(new ProcessStartInfo(AppData.Directory) { UseShellExecute = true }));
         menu.Items.Add(new Forms.ToolStripSeparator());
@@ -262,7 +349,8 @@ public partial class App : Application
             _settingsWindow.Activate();
             return;
         }
-        _settingsWindow = new SettingsWindow(_manager!, ChangeLanguage, RestoreIcons);
+        _settingsWindow = new SettingsWindow(_manager!, ChangeLanguage, RestoreIcons,
+            AutoStart.IsPackaged ? null : CheckForUpdates);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
     }

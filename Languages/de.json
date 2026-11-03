@@ -187,5 +187,14 @@
   "settings.restoreSnapshotBtn": "Restore Selected Layout",
   "settings.about": "About",
   "settings.openFolder": "Open Settings Folder",
-  "settings.close": "Close"
+  "settings.close": "Close",
+  "update.check": "Check for updates…",
+  "update.checkBtn": "Check for updates (now {0})",
+  "update.upToDate": "You have the latest version ({0}).",
+  "update.available": "Version {0} is available (you have {1}).\n\nDownload it, install it and restart TidyDesktop? Your boxes and settings stay as they are.",
+  "update.downloading": "Downloading the update",
+  "update.downloadingText": "TidyDesktop will close for a moment and start again with the new version.",
+  "update.done": "Updated to TidyDesktop {0}",
+  "update.doneText": "Your boxes and settings are unchanged.",
+  "update.failed": "Could not update.\n\n{0}\n\nOpen the download page?"
 }
